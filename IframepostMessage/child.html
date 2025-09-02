@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Child (cross-origin)</title>
+<style>
+  body { font-family: system-ui; margin: 12px; }
+  .ok { color: #0a0; }
+</style>
+
+<p>Child listo ✅ (cross-origin)</p>
+<div id="last"></div>
+
+<script>
+  // ⚠️ Cambia esto si el padre NO está en http://localhost:5173
+  const PARENT_ORIGIN = "http://localhost:5173";
+
+  window.addEventListener("message", (event) => {
+    // 🔐 Seguridad: aceptar SOLO del origen del padre esperado
+    if (event.origin !== PARENT_ORIGIN) return;
+
+    const msg = event.data;
+    const last = document.getElementById("last");
+    last.textContent = "Recibido del padre: " + JSON.stringify(msg);
+
+    // Responder con PONG al padre (usa event.source + event.origin)
+    event.source.postMessage({ type: "PONG", at: Date.now() }, event.origin);
+  });
+</script>
