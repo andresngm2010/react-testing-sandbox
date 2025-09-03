@@ -4,24 +4,70 @@
 <style>
   body { font-family: system-ui; margin: 12px; }
   .ok { color: #0a0; }
+  .muted { color: #555; }
+  button { padding: 6px 10px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer; }
 </style>
 
-<p>Child listo ✅ (cross-origin)</p>
-<div id="last"></div>
+<h1 style="margin:0 0 8px 0;">Child listo ✅ (cross-origin)</h1>
+
+<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+  <button id="changeBtn" data-testid="child-change">Cambiar texto</button>
+  <button id="resetBtn" data-testid="child-reset">Reset</button>
+</div>
+
+<!-- Texto que se modificará y que las herramientas pueden validar -->
+<div id="last" data-testid="child-status" role="status" aria-live="polite" class="muted">
+  Estado: INICIAL
+</div>
 
 <script>
-  // ⚠️ Cambia esto si el padre NO está en http://localhost:5173
+  // ⚠️ Ajusta si el padre NO está en http://localhost:5173
   const PARENT_ORIGIN = "http://localhost:5173";
 
+  const lastEl = document.getElementById("last");
+  const changeBtn = document.getElementById("changeBtn");
+  const resetBtn  = document.getElementById("resetBtn");
+
+  function setStatus(text, cls = "ok") {
+    lastEl.textContent = text;
+    lastEl.className = cls;
+    // Notificar al padre (si existe) para validación desde fuera del iframe
+    if (window.parent) {
+      window.parent.postMessage({ type: "TEXT_CHANGED", text, at: Date.now() }, PARENT_ORIGIN);
+    }
+  }
+
+  changeBtn.addEventListener("click", () => {
+    const t = new Date().toLocaleTimeString();
+    setStatus(`Estado: CAMBIADO por click (${t})`, "ok");
+  });
+
+  resetBtn.addEventListener("click", () => {
+    setStatus("Estado: INICIAL", "muted");
+  });
+
+  // Escuchar mensajes del padre (por si quieres activar el cambio sin tocar el DOM interno)
   window.addEventListener("message", (event) => {
     // 🔐 Seguridad: aceptar SOLO del origen del padre esperado
     if (event.origin !== PARENT_ORIGIN) return;
 
-    const msg = event.data;
-    const last = document.getElementById("last");
-    last.textContent = "Recibido del padre: " + JSON.stringify(msg);
-
-    // Responder con PONG al padre (usa event.source + event.origin)
-    event.source.postMessage({ type: "PONG", at: Date.now() }, event.origin);
+    const msg = event.data || {};
+    if (msg.type === "PING") {
+      // Responder al handshake original
+      event.source.postMessage({ type: "PONG", at: Date.now() }, event.origin);
+      return;
+    }
+    if (msg.type === "CHANGE_TEXT") {
+      const t = msg.text || `Estado: CAMBIADO por postMessage (${new Date().toLocaleTimeString()})`;
+      setStatus(t, "ok");
+      // Confirmación explícita
+      event.source.postMessage({ type: "TEXT_CHANGED_ACK", text: t, at: Date.now() }, event.origin);
+      return;
+    }
+    if (msg.type === "RESET_TEXT") {
+      setStatus("Estado: INICIAL", "muted");
+      event.source.postMessage({ type: "TEXT_RESET_ACK", at: Date.now() }, event.origin);
+      return;
+    }
   });
 </script>
